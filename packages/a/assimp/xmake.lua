@@ -5,6 +5,8 @@ package("assimp")
 
     set_urls("https://github.com/assimp/assimp/archive/refs/tags/$(version).zip",
              "https://github.com/assimp/assimp.git")
+    add_versions("v6.0.2", "699b455b92ce2b6b39aa06a957e59f9d83e8652c8b51364e811660a4acb9ee49")
+    add_versions("v6.0.1", "24256974f66e36df6c72b78d4903e1bb6875b6d3f8aa8638639def68f2c50fd0")
     add_versions("v5.4.3", "795c29716f4ac123b403e53b677e9f32a8605c4a7b2d9904bfaae3f4053b506d")
     add_versions("v5.4.2", "03e38d123f6bf19a48658d197fd09c9a69db88c076b56a476ab2da9f5eb87dcc")
     add_versions("v5.4.1", "08837ee7c50b98ca72d2c9e66510ca6640681db8800aa2d3b1fcd61ccc615113")
@@ -45,6 +47,7 @@ package("assimp")
     add_configs("android_jniiosysystem", {description = "Enable Android JNI IOSystem support.", default = false, type = "boolean"})
     add_configs("asan",                  {description = "Enable AddressSanitizer.", default = false, type = "boolean"})
     add_configs("ubsan",                 {description = "Enable Undefined Behavior sanitizer.", default = false, type = "boolean"})
+    add_configs("draco",                 {description = "Enable Draco, primary for GLTF.", default = false, type = "boolean"})
 
     add_deps("cmake", "minizip", "zlib")
 
@@ -104,6 +107,10 @@ package("assimp")
         add_config_arg("asan",             "ASSIMP_ASAN")
         add_config_arg("ubsan",            "ASSIMP_UBSAN")
 
+        if package:version():ge("5.2.5") then
+            add_config_arg("draco", "ASSIMP_BUILD_DRACO")
+        end
+
         if package:is_plat("android") then
             add_config_arg("android_jniiosysystem", "ASSIMP_ANDROID_JNIIOSYSTEM")
         end
@@ -136,6 +143,9 @@ package("assimp")
             local minizip = package:dep("minizip")
             if minizip and not minizip:is_system() then
                 packagedeps = table.join2(packagedeps or {}, "minizip")
+                if minizip:config("bzip2") then
+                    table.insert(packagedeps, "bzip2")
+                end
             end
             -- fix ninja debug build
             os.mkdir(path.join(package:buildir(), "code/pdb"))
@@ -143,6 +153,9 @@ package("assimp")
             if package:is_debug() and package:has_runtime("MD", "MT") then
                 io.replace("CMakeLists.txt", "/D_DEBUG", "", {plain = true})
             end
+
+            -- fix std::min/max conflict with windows.h
+            io.insert("code/AssetLib/IFC/IFCLoader.cpp", 1, "#define NOMINMAX")
         end
 
         local zlib = package:dep("zlib")

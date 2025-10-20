@@ -6,6 +6,7 @@ package("opencv")
 
     add_urls("https://github.com/opencv/opencv/archive/$(version).tar.gz",
              "https://github.com/opencv/opencv.git")
+    add_versions("4.12.0", "44c106d5bb47efec04e531fd93008b3fcd1d27138985c5baf4eafac0e1ec9e9d")
     add_versions("4.11.0", "9a7c11f924eff5f8d8070e297b322ee68b9227e003fd600d4b8122198091665f")
     add_versions("4.10.0", "b2171af5be6b26f7a06b1229948bbb2bdaa74fcf5cd097e0af6378fce50a6eb9")
     add_versions("4.9.0", "ddf76f9dffd322c7c3cb1f721d0887f62d747b82059342213138dc190f28bc6c")
@@ -19,6 +20,9 @@ package("opencv")
     add_versions("4.2.0", "9ccb2192d7e8c03c58fee07051364d94ed7599363f3b0dce1c5e6cc11c1bb0ec")
     add_versions("3.4.9", "b7ea364de7273cfb3b771a0d9c111b8b8dfb42ff2bcd2d84681902fb8f49892a")
 
+    add_patches("4.11.0", "https://github.com/opencv/opencv/commit/767dd838d3074409fd72a4d76c320b1370e95943.diff", "376dd90500ab7205084fd4298ff26137ce9678b00233ad20ca2189ef9eca3a58")
+
+    add_resources("4.12.0", "opencv_contrib", "https://github.com/opencv/opencv_contrib/archive/4.12.0.tar.gz", "4197722b4c5ed42b476d42e29beb29a52b6b25c34ec7b4d589c3ae5145fee98e")
     add_resources("4.11.0", "opencv_contrib", "https://github.com/opencv/opencv_contrib/archive/4.11.0.tar.gz", "2dfc5957201de2aa785064711125af6abb2e80a64e2dc246aca4119b19687041")
     add_resources("4.10.0", "opencv_contrib", "https://github.com/opencv/opencv_contrib/archive/4.10.0.tar.gz", "65597f8fb8dc2b876c1b45b928bbcc5f772ddbaf97539bf1b737623d0604cba1")
     add_resources("4.9.0", "opencv_contrib", "https://github.com/opencv/opencv_contrib/archive/4.9.0.tar.gz", "8952c45a73b75676c522dd574229f563e43c271ae1d5bbbd26f8e2b6bc1a4dae")
@@ -44,6 +48,7 @@ package("opencv")
     add_configs("blas", {description = "Set BLAS vendor.", values = {"mkl", "openblas"}})
     add_configs("cuda", {description = "Enable CUDA support.", default = false, type = "boolean"})
     add_configs("dynamic_parallel", {description = "Dynamically load parallel runtime (TBB etc.).", default = false, type = "boolean"})
+    add_configs("mirror", {description = "Set mirror for download.", values = {"github", "gitcode"}})
 
     if is_plat("macosx") then
         add_frameworks("Foundation", "CoreFoundation", "CoreGraphics", "AppKit", "OpenCL", "Accelerate")
@@ -51,8 +56,10 @@ package("opencv")
     elseif is_plat("linux") then
         add_extsources("pacman::opencv", "apt::libopencv-dev")
         add_syslinks("pthread", "dl")
-    elseif is_plat("windows", "mingw") then
+    elseif is_plat("windows") then
         add_syslinks("gdi32", "user32", "glu32", "opengl32", "advapi32", "comdlg32", "ws2_32")
+    elseif is_plat("mingw") then
+        add_syslinks("gdi32", "user32", "glu32", "opengl32", "advapi32", "comdlg32", "ws2_32", "pthread")
     end
 
     on_fetch("macosx", function (package, opt)
@@ -77,7 +84,7 @@ package("opencv")
         end
     end)
 
-    on_load("linux", "macosx", "windows", "mingw@windows,msys", function (package)
+    on_load("android", "linux", "macosx", "windows", "mingw@windows,msys", function (package)
         if package:is_plat("windows") then
             local arch = "x64"
             if     package:is_arch("x86")   then arch = "x86"
@@ -97,6 +104,11 @@ package("opencv")
             local arch = (package:is_arch("x86_64") and "x64" or "x86")
             local linkdir = (package:config("shared") and "lib" or "staticlib")
             package:add("linkdirs", path.join(arch, "mingw", linkdir))
+        elseif package:is_plat("android") then
+            local linkdir = (package:config("shared") and "libs" or "staticlibs")
+            package:add("linkdirs", path.join("sdk/native", linkdir, package:targetarch()))
+            package:add("linkdirs", path.join("sdk/native/3rdparty/libs", package:targetarch()))
+            package:add("includedirs", "sdk/native/jni/include")
         elseif package:version():ge("4.0") then
             package:add("includedirs", "include/opencv4")
             package:add("linkdirs", "lib", "lib/opencv4/3rdparty")
@@ -122,21 +134,22 @@ package("opencv")
         end
 
         if package:config("tesseract") then
-            package:add("deps", "tesseract 4.1.3") -- Opencv need tesseract from the v4 series
+            package:add("deps", "tesseract 4.1.3") -- OpenCV need tesseract from the v4 series
         end
     end)
 
     if on_check then
         on_check("windows|arm64", function (package)
+            import("core.base.semver")
             if package:version() and package:version():lt("4.10.0") then
                 raise("current opencv version does not support windows/arm64!")
             end
             local vs = package:toolchain("msvc"):config("vs")
-            assert(tonumber(vs) >= 2022, "opencv requires Visual Studio 2022 and later for arm targets")
+            assert(tonumber(vs) >= 2022, "package(opencv) requires Visual Studio 2022 and later for arm targets")
         end)
     end
 
-    on_install("linux", "macosx", "windows", "mingw@windows,msys", function (package)
+    on_install("android", "linux", "macosx", "windows", "mingw@windows,msys", function (package)
         io.replace("cmake/OpenCVUtils.cmake", "if(PKG_CONFIG_FOUND OR PkgConfig_FOUND)", "if(NOT WIN32 AND (PKG_CONFIG_FOUND OR PkgConfig_FOUND))", {plain = true})
         local configs = {"-DCMAKE_OSX_DEPLOYMENT_TARGET=",
                          "-DBUILD_PERF_TESTS=OFF",
@@ -162,6 +175,9 @@ package("opencv")
         if package:config("cuda") then
             table.insert(configs, "-DWITH_CUDA=ON")
         end
+        if package:config("mirror") then
+            table.insert(configs, "-DOPENCV_DOWNLOAD_MIRROR_ID=" .. package:config("mirror"))
+        end
         table.insert(configs, "-DPARALLEL_ENABLE_PLUGINS=" .. (package:config("dynamic_parallel") and "ON" or "OFF"))
         table.insert(configs, "-DCMAKE_BUILD_TYPE=" .. (package:debug() and "Debug" or "Release"))
         table.insert(configs, "-DBUILD_SHARED_LIBS=" .. (package:config("shared") and "ON" or "OFF"))
@@ -170,6 +186,14 @@ package("opencv")
             if package:is_arch("arm64") then
                 -- https://github.com/opencv/opencv/issues/25052
                 table.insert(configs, "-DCPU_NEON_FP16_SUPPORTED=OFF")
+                -- Newest Windows ARM worker issue
+                if package:has_runtime("MT", "MTd") then
+                    table.insert(configs, "-DCPU_NEON_DOTPROD_SUPPORTED=OFF")
+                end
+                -- https://github.com/opencv/opencv/issues/24235
+                table.insert(configs, "-DOPENCV_SKIP_SYSTEM_PROCESSOR_DETECTION=ON")
+                -- Enforce ARM64 without check
+                table.insert(configs, "-DAARCH64=ON")
             end
         end
         if package:is_cross() or (package:is_plat("mingw") and not package:is_arch(os.arch())) then
@@ -179,8 +203,19 @@ package("opencv")
                 table.insert(configs, "-DCMAKE_SYSTEM_NAME=Darwin")
             elseif package:is_plat("linux") then
                 table.insert(configs, "-DCMAKE_SYSTEM_NAME=Linux")
+            elseif package:is_plat("android") then
+                table.insert(configs, "-DCMAKE_SYSTEM_NAME=Android")
+                -- from https://github.com/opencv/opencv/issues/15769#issuecomment-549570072
+                table.insert(configs, "-DBUILD_ANDROID_EXAMPLES=OFF")
+                table.insert(configs, "-DBUILD_ANDROID_PROJECTS=OFF")
             end
-            table.insert(configs, "-DCMAKE_SYSTEM_PROCESSOR=" .. package:targetarch())
+
+            -- In case of android we prefer to set CMAKE_ANDROID_ARCH_ABI rather than CMAKE_SYSTEM_PROCESSOR
+            if package:is_plat("android") then
+                table.insert(configs, "-DCMAKE_ANDROID_ARCH_ABI=" .. package:targetarch())
+            else
+                table.insert(configs, "-DCMAKE_SYSTEM_PROCESSOR=" .. package:targetarch())
+            end
         end
         local resourcedir = package:resourcedir("opencv_contrib")
         if resourcedir then
@@ -223,10 +258,21 @@ package("opencv")
             end
             package:add("links", reallink)
         end
-        if package:is_plat("windows") then
+        if package:is_plat("android") then
+            for _, suffix in ipairs({"*.a", "*.so"}) do
+                for _, f in ipairs(os.files(path.join(package:installdir(path.join("sdk/native/3rdparty/libs", package:targetarch())), suffix))) do
+                    package:add("links", path.basename(f):match("lib(.+)"))
+                end
+            end
+        elseif package:is_plat("windows") then
             local arch = "x64"
             if     package:is_arch("x86")   then arch = "x86"
             elseif package:is_arch("arm64") then arch = "ARM64"
+            end
+            -- Workaround for arm64
+            if package:is_arch("arm64") then
+                os.trymv(path.join(package:installdir(), "x64"), path.join(package:installdir(), "ARM64"))
+                os.trymv(path.join(package:installdir(), "x86"), path.join(package:installdir(), "ARM64"))
             end
             local linkdir = (package:config("shared") and "lib" or "staticlib")
             local vs = package:toolchain("msvc"):config("vs")
@@ -246,7 +292,7 @@ package("opencv")
                     package:add("links", path.basename(f))
                 end
             end
-            package:addenv("PATH", "bin") -- fix path for 4.9.0/vs2022
+            package:addenv("PATH", "bin") -- Fix path for 4.9.0 / vs2022
             package:addenv("PATH", path.join(arch, vc_ver, "bin"))
         elseif package:is_plat("mingw") then
             local arch = package:is_arch("x86_64") and "x64" or "x86"

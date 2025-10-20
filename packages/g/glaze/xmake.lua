@@ -7,6 +7,21 @@ package("glaze")
     add_urls("https://github.com/stephenberry/glaze/archive/refs/tags/$(version).tar.gz",
              "https://github.com/stephenberry/glaze.git")
 
+    add_versions("v6.0.0", "cf7450ceba973349130ce9526dec8b7726e20dd22b0ef1bda4d8eb24df7e103f")
+    add_versions("v5.7.1", "c896ec90927a93ea43d33113ca2fd7b62961b870cb7fc12586cc865f335992f7")
+    add_versions("v5.6.0", "6f21e4186ce14b5243a5d2e58419f45fda260da2c0fa9ef793a5c46eaa05b2b3")
+    add_versions("v5.5.5", "c2ae536d634aa12f49ac7521f169d2891af55b3376648cbb0053daadb78b6ef1")
+    add_versions("v5.5.4", "309184e6cf046669f22b336b85a1ab92278a45ad05fce079be4c0f45e19dcbd2")
+    add_versions("v5.5.2", "92382568999829a531db5a3800a36d8699674d640d3862fcb7e79ee2879d95ec")
+    add_versions("v5.5.1", "a30fedaffca7a0afdfa8e7b6f570fbbdc5fed6b0c8146c7922c0e11252d12404")
+    add_versions("v5.5.0", "378ba049e37b4c318fe0bdb2c6803369576707e40bad777959ed706dc361fc6b")
+    add_versions("v5.4.1", "a5d578e58fa0e0930eb02bf99ebcb0cb732ce04ce427ec608d773c6f5258e545")
+    add_versions("v5.4.0", "b6f7f62dba80b863df16a9370f676bc32f72a2d2ee401952aa9305b202136476")
+    add_versions("v5.3.1", "4c7a31abfc37a021a5120e9bc7d9de8116c10ce1470e09f4306c6e5a1a6fb555")
+    add_versions("v5.3.0", "5a130dc52d789cd82d52e172d7c2b1fdcc893f3354462ae6b8825f38746f04dd")
+    add_versions("v5.2.1", "ae3f7f0c7bd3a800466a030856a3532e0bb4fd9ef757a1123690900d6f8fec2e")
+    add_versions("v5.2.0", "761b4bc97482f2e20273b3d180059b870c6996e7f9ab58eecdc675b44044c7da")
+    add_versions("v5.1.2", "bf8d7187a05b6c49481ede2bda933c853de97b4ea0bf3f4d3e0b1a68b0ae207e")
     add_versions("v5.1.0", "c91265728918f914a69a935e2d1dbca26d025170b6d338220fc83b698c913f80")
     add_versions("v5.0.2", "ed47ba0b5dcef5a2d2a41b4863e91a3b509c469a70c1a1fed885545d1b672681")
     add_versions("v4.4.3", "d0dd03f156f95860bf9c2957da0704ee0f7651e21089ff34e3d26fa0190e8684")
@@ -29,7 +44,16 @@ package("glaze")
 
     add_patches("4.0.1", "https://github.com/stephenberry/glaze/commit/8f35df43bcb1210a0c1e07a68b99608e29ecea43.patch", "66eba4c0eea1469c1bf21b2b6ea31cb320391d1095ffe06c5a7ff3dfda796763")
 
+    add_configs("ssl", {description = "Enable SSL support for networking", default = false, type = "boolean"})
+
     add_deps("cmake")
+
+    on_load(function (package)
+        if package:config("ssl") then
+            package:add("deps", "openssl3")
+            package:add("defines", "GLZ_ENABLE_SSL")
+        end
+    end)
 
     if on_check then
         on_check(function (package)
@@ -57,7 +81,7 @@ package("glaze")
                 #include <bit>
                 #include <cstdint>
                 void test() {
-                    constexpr double f64v = 19880124.0; 
+                    constexpr double f64v = 19880124.0;
                     constexpr auto u64v = std::bit_cast<std::uint64_t>(f64v);
                 }
             ]]}, {configs = {languages = "c++20"}}), "package(glaze) require >= c++20")
@@ -74,7 +98,8 @@ package("glaze")
             import("package.tools.cmake").install(package, {
                 "-Dglaze_DEVELOPER_MODE=OFF",
                 "-DCMAKE_CXX_STANDARD=23",
-                "-DCMAKE_BUILD_TYPE=" .. (package:is_debug() and "Debug" or "Release")
+                "-DCMAKE_BUILD_TYPE=" .. (package:is_debug() and "Debug" or "Release"),
+                "-Dglaze_ENABLE_SSL=" .. (package:config("ssl") and "ON" or "OFF")
             })
         else
             os.cp("include", package:installdir())
